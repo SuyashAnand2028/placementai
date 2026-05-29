@@ -75,27 +75,29 @@ export async function POST(req: NextRequest) {
         analyzedAt: new Date().toISOString(),
       },
     });
-  } catch (error: unknown) {
+  } catch (error: any) {
     console.error("Analysis error:", error);
-
-    const message = error instanceof Error ? error.message : "Analysis failed";
-
-    if (message.includes("API_KEY") || message.includes("403")) {
+    
+    // Extract Groq API error if present
+    const errorMessage = error?.error?.error?.message || error?.message || "Analysis failed. Please try again in a moment.";
+    
+    // Check for specific error types
+    if (errorMessage.includes("API_KEY") || errorMessage.includes("403")) {
       return NextResponse.json(
         { error: "AI service configuration error. Please contact support." },
         { status: 500 }
       );
     }
-
-    if (message.includes("429") || message.includes("Quota") || message.includes("quota")) {
+    
+    if (errorMessage.includes("429") || errorMessage.includes("Quota") || errorMessage.includes("quota") || errorMessage.includes("rate limit")) {
       return NextResponse.json(
-        { error: "AI quota exceeded. Please wait 1 minute and try again." },
+        { error: "AI quota exceeded. Please wait a moment and try again." },
         { status: 429 }
       );
     }
 
     return NextResponse.json(
-      { error: "Analysis failed. Please try again in a moment." },
+      { error: errorMessage },
       { status: 500 }
     );
   }
