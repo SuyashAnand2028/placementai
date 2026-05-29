@@ -93,8 +93,8 @@ Requirements:
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    model: "meta-llama/llama-4-scout-17b-16e-instruct",
-    temperature: 0.2,
+    model: "llama-3.3-70b-versatile",
+    temperature: 0.7,
     max_tokens: 4096,
     response_format: { type: "json_object" }
   });
