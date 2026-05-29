@@ -1,5 +1,4 @@
 import Groq from "groq-sdk";
-import { GoogleGenAI } from "@google/genai";
 
 export interface AnalysisResult {
   ats_score: number;
@@ -19,10 +18,23 @@ export interface AnalysisResult {
   india_specific_tips: string[];
   linkedin_tips: string[];
   cover_letter: string;
-  full_rewritten_resume: string;
   summary: string;
   strengths: string[];
   weaknesses: string[];
+}
+
+/**
+ * Extracts the first complete JSON object from any model output.
+ * Handles: <think> blocks, ```json fences, preamble text, trailing text.
+ */
+function extractJSON(raw: string): string {
+  // Find the first { and last }
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start === -1 || end === -1 || end < start) {
+    throw new Error("No JSON object found in AI response.");
+  }
+  return raw.slice(start, end + 1);
 }
 
 export async function analyzeResume(
@@ -31,17 +43,51 @@ export async function analyzeResume(
   companyType: string,
   cgpa?: string
 ): Promise<AnalysisResult> {
-  const systemPrompt = `You are an expert resume reviewer specializing in the Indian engineering job market. You deeply understand:
-- On-campus placement drives at IITs, NITs, and private engineering colleges like MIT Manipal, VIT, SRM
-- CGPA cutoffs (typically 6.0, 7.0, 7.5, 8.0 for different company tiers)
-- The difference between product companies (Google, Microsoft, Amazon, Flipkart), service companies (TCS, Infosys, Wipro, Accenture), and Indian startups
-- That Indian students often list too many irrelevant projects or use weak action verbs like "worked on", "helped with", "was involved in"
-- ATS systems used by Indian companies and job portals like Naukri, LinkedIn, iimjobs
-- The importance of internships, open source, competitive programming for product companies
-- How to position CGPA strategically (hide if low, highlight if high)
-- Strong action verbs: Engineered, Architected, Optimized, Spearheaded, Delivered, Reduced, Increased, Automated
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    throw new Error("GROQ_API_KEY is not configured in environment variables.");
+  }
 
-You MUST respond with ONLY a valid JSON object. No markdown fences, no explanation text, no preamble — just the raw JSON object starting with { and ending with }.`;
+  const groq = new Groq({ apiKey });
+
+  const systemPrompt = `You are an elite ATS analyst and career coach specializing in the Indian engineering job market (IITs, NITs, BITS, private colleges like MIT Manipal, VIT, SRM).
+
+You deeply understand:
+- On-campus placement culture, CGPA cutoffs (6.0 / 7.0 / 7.5 / 8.0 for different company tiers)
+- The difference between product companies (Google, Microsoft, Amazon, Flipkart), service companies (TCS, Infosys, Wipro), and Indian startups
+- Indian job portals: Naukri, LinkedIn, iimjobs, Internshala
+- ATS systems used by Indian recruiters
+- Strong action verbs: Engineered, Architected, Optimized, Spearheaded, Delivered, Reduced, Automated, Orchestrated
+
+OUTPUT FORMAT: You MUST respond with ONLY a raw JSON object. Absolutely no markdown fences, no explanation, no preamble. Start your response directly with { and end with }.
+
+JSON structure:
+{
+  "ats_score": <integer 0-100>,
+  "score_breakdown": {
+    "keywords": <integer 0-100>,
+    "format": <integer 0-100>,
+    "length": <integer 0-100>,
+    "action_verbs": <integer 0-100>,
+    "relevance": <integer 0-100>
+  },
+  "summary": "<2-3 sentence honest overall assessment of this resume vs this JD>",
+  "strengths": ["<strength>", "<strength>", "<strength>"],
+  "weaknesses": ["<weakness>", "<weakness>", "<weakness>"],
+  "improved_bullets": [
+    {
+      "original": "<exact bullet text from resume>",
+      "improved": "<rewritten with strong action verb + quantified impact + specific tech>",
+      "reason": "<why this improves ATS score>"
+    }
+  ],
+  "missing_keywords": ["<keyword from JD missing in resume>"],
+  "india_specific_tips": ["<India job market tip>"],
+  "linkedin_tips": ["<tip 1>", "<tip 2>", "<tip 3>", "<tip 4>", "<tip 5>"],
+  "cover_letter": "<full 3-4 paragraph professional cover letter ready to send>"
+}
+
+Requirements: improved_bullets >= 5 entries, missing_keywords >= 8, india_specific_tips >= 5, linkedin_tips exactly 5.`;
 
   const userPrompt = `Company Type: ${companyType}
 ${cgpa ? `Candidate CGPA: ${cgpa}` : ""}
@@ -52,75 +98,49 @@ ${resumeText}
 JOB DESCRIPTION:
 ${jobDescription}
 
-Analyze this resume against the job description. Return ONLY this JSON structure (raw JSON, no markdown):
-{
-  "ats_score": <integer 0-100>,
-  "score_breakdown": {
-    "keywords": <integer 0-100>,
-    "format": <integer 0-100>,
-    "length": <integer 0-100>,
-    "action_verbs": <integer 0-100>,
-    "relevance": <integer 0-100>
-  },
-  "summary": "<2-3 sentence honest overall assessment>",
-  "strengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
-  "weaknesses": ["<weakness 1>", "<weakness 2>", "<weakness 3>"],
-  "improved_bullets": [
-    {
-      "original": "<exact bullet from resume>",
-      "improved": "<rewritten with strong action verb, quantified impact, specific technologies>",
-      "reason": "<why this change improves ATS score and readability>"
-    }
-  ],
-  "missing_keywords": ["<keyword from JD not in resume>"],
-  "india_specific_tips": ["<tip specific to Indian job market, company type, placement culture>"],
-  "linkedin_tips": ["<specific tip 1>", "<specific tip 2>", "<specific tip 3>", "<specific tip 4>", "<specific tip 5>"],
-  "cover_letter": "<complete 3-4 paragraph professional cover letter, ~300 words, formal Indian business English, referencing specific skills from resume and JD>"
-}
+Analyze this resume against the job description and return the JSON object now.`;
 
-Requirements:
-- improved_bullets: at least 5 entries
-- missing_keywords: at least 8 keywords  
-- india_specific_tips: at least 5 tips
-- linkedin_tips: array of 5 actionable tips for their LinkedIn profile
-- cover_letter: complete and professional, ready to send`;
+  // Attempt with retry on rate limit
+  async function callAPI(retryCount = 0): Promise<string> {
+    try {
+      const completion = await groq.chat.completions.create({
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        model: "llama-3.3-70b-versatile",
+        temperature: 0.6,
+        max_tokens: 4096,
+      });
+      return completion.choices[0]?.message?.content ?? "";
+    } catch (error: any) {
+      const is429 =
+        error?.status === 429 ||
+        error?.message?.includes("429") ||
+        error?.message?.toLowerCase().includes("rate limit");
 
-  let text = "";
-
-  if (process.env.GEMINI_API_KEY) {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: userPrompt,
-      config: {
-        systemInstruction: systemPrompt,
-        responseMimeType: "application/json",
-        temperature: 0.7,
+      if (is429 && retryCount < 1) {
+        // Wait 3 seconds and try once more
+        await new Promise((r) => setTimeout(r, 3000));
+        return callAPI(retryCount + 1);
       }
-    });
-    text = response.text || "";
-  } else if (process.env.GROQ_API_KEY) {
-    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-    const completion = await groq.chat.completions.create({
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      model: "llama-3.3-70b-versatile",
-      temperature: 0.7,
-      max_tokens: 4096,
-      response_format: { type: "json_object" }
-    });
-    text = completion.choices[0]?.message?.content ?? "";
-  } else {
-    throw new Error("No AI API key found. Please configure GEMINI_API_KEY or GROQ_API_KEY in your environment variables.");
+      throw error;
+    }
   }
 
-  // Extract JSON — handle any accidental markdown wrapping
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    throw new Error("Failed to parse AI response as JSON");
+  const rawText = await callAPI();
+
+  if (!rawText || rawText.trim().length === 0) {
+    throw new Error("AI returned an empty response. Please try again.");
   }
 
-  return JSON.parse(jsonMatch[0]) as AnalysisResult;
+  const jsonString = extractJSON(rawText);
+  const result = JSON.parse(jsonString) as AnalysisResult;
+
+  // Validate critical fields exist
+  if (typeof result.ats_score !== "number") {
+    throw new Error("AI response missing ats_score field.");
+  }
+
+  return result;
 }

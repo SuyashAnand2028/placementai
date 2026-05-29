@@ -42,25 +42,30 @@ interface RazorpayInstance {
   open: () => void;
 }
 
+// ── Score Ring Component ────────────────────────────────────────────────────
 function ScoreRing({ score, color }: { score: number; color: string }) {
-  const radius = 54;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (score / 100) * circumference;
+  const r = 68;
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (score / 100) * circ;
 
   return (
     <div className="score-ring">
-      <svg width="140" height="140" viewBox="0 0 140 140">
-        <circle cx="70" cy="70" r={radius} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="10" />
+      <svg width="160" height="160" viewBox="0 0 160 160">
+        {/* Track */}
+        <circle cx="80" cy="80" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="10" />
+        {/* Progress */}
         <circle
-          cx="70" cy="70" r={radius} fill="none"
-          stroke={color} strokeWidth="10"
-          strokeDasharray={circumference}
+          cx="80" cy="80" r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth="10"
+          strokeDasharray={circ}
           strokeDashoffset={offset}
           strokeLinecap="round"
-          style={{ transition: "stroke-dashoffset 1s ease" }}
+          style={{ transition: "stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)" }}
         />
       </svg>
-      <div className="score-ring-label">
+      <div className="score-ring-center">
         <span className="score-number" style={{ color }}>{score}</span>
         <span className="score-label">ATS Score</span>
       </div>
@@ -69,18 +74,19 @@ function ScoreRing({ score, color }: { score: number; color: string }) {
 }
 
 function getScoreColor(score: number) {
-  if (score >= 75) return "#00d4aa";
-  if (score >= 50) return "#ffd700";
-  return "#ff6b9d";
+  if (score >= 75) return "var(--accent-green)";
+  if (score >= 50) return "var(--accent-amber)";
+  return "var(--accent-pink)";
 }
 
 function getScoreLabel(score: number) {
-  if (score >= 80) return { label: "Excellent", color: "#00d4aa" };
-  if (score >= 65) return { label: "Good", color: "#ffd700" };
-  if (score >= 45) return { label: "Needs Work", color: "#ff8c42" };
-  return { label: "Critical", color: "#ff6b9d" };
+  if (score >= 80) return "Excellent";
+  if (score >= 65) return "Good";
+  if (score >= 45) return "Needs Work";
+  return "Critical";
 }
 
+// ── Main Component ──────────────────────────────────────────────────────────
 export default function ResultsPage() {
   const params = useParams();
   const id = params?.id as string;
@@ -90,21 +96,20 @@ export default function ResultsPage() {
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<"bullets" | "keywords" | "linkedin" | "cover">("bullets");
+  const [scoreVisible, setScoreVisible] = useState(false);
 
   useEffect(() => {
     if (!id) return;
     const stored = localStorage.getItem(`analysis_${id}`);
-    if (stored) {
-      setAnalysis(JSON.parse(stored));
-    }
-
-    // Check if already paid
-    const paidStatus = localStorage.getItem(`paid_${id}`);
-    if (paidStatus === "true") setIsPaid(true);
+    if (stored) setAnalysis(JSON.parse(stored));
+    if (localStorage.getItem(`paid_${id}`) === "true") setIsPaid(true);
+    // Trigger score ring animation after mount
+    const t = setTimeout(() => setScoreVisible(true), 200);
+    return () => clearTimeout(t);
   }, [id]);
 
-  const loadRazorpay = (): Promise<boolean> => {
-    return new Promise((resolve) => {
+  const loadRazorpay = (): Promise<boolean> =>
+    new Promise((resolve) => {
       if (window.Razorpay) { resolve(true); return; }
       const script = document.createElement("script");
       script.src = "https://checkout.razorpay.com/v1/checkout.js";
@@ -112,11 +117,9 @@ export default function ResultsPage() {
       script.onerror = () => resolve(false);
       document.body.appendChild(script);
     });
-  };
 
   const handlePayment = async () => {
     setPaymentLoading(true);
-
     const loaded = await loadRazorpay();
     if (!loaded) {
       alert("Could not load payment gateway. Please check your connection.");
@@ -130,7 +133,6 @@ export default function ResultsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ analysisId: id }),
       });
-
       const order = await res.json();
 
       if (!res.ok) {
@@ -150,12 +152,8 @@ export default function ResultsPage() {
           const verifyRes = await fetch("/api/payment/verify", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              ...response,
-              analysisId: id,
-            }),
+            body: JSON.stringify({ ...response, analysisId: id }),
           });
-
           if (verifyRes.ok) {
             localStorage.setItem(`paid_${id}`, "true");
             setIsPaid(true);
@@ -165,7 +163,7 @@ export default function ResultsPage() {
           setPaymentLoading(false);
         },
         prefill: { name: "", email: "" },
-        theme: { color: "#6c63ff" },
+        theme: { color: "#7c6cff" },
       };
 
       const rzp = new window.Razorpay(options);
@@ -184,29 +182,45 @@ export default function ResultsPage() {
     }
   };
 
+  // ── Loading State ─────────────────────────────────────────────────────────
   if (!analysis) {
     return (
-      <div className="loading-screen">
-        <div className="loading-spinner" />
-        <p style={{ color: "var(--text-secondary)" }}>Loading your results...</p>
-        <Link href="/analyze" className="btn btn-secondary" style={{ marginTop: "16px" }}>
-          Start New Analysis
-        </Link>
-      </div>
+      <>
+        <div className="orb-container" aria-hidden="true">
+          <div className="orb orb-1" /><div className="orb orb-2" />
+        </div>
+        <nav className="navbar">
+          <Link href="/" className="navbar-logo">
+            <div className="navbar-logo-icon">🎯</div>PlacementAI
+          </Link>
+        </nav>
+        <div className="loading-screen">
+          <div className="loading-spinner" />
+          <p>Loading your report...</p>
+          <Link href="/analyze" className="btn btn-secondary" style={{ marginTop: "8px" }}>
+            Start New Analysis
+          </Link>
+        </div>
+      </>
     );
   }
 
   const scoreColor = getScoreColor(analysis.ats_score);
   const scoreLabel = getScoreLabel(analysis.ats_score);
+  const displayScore = scoreVisible ? analysis.ats_score : 0;
 
+  // ── Main Render ───────────────────────────────────────────────────────────
   return (
-    <main>
+    <>
+      <div className="orb-container" aria-hidden="true">
+        <div className="orb orb-1" /><div className="orb orb-2" />
+      </div>
+
       <nav className="navbar">
         <Link href="/" className="navbar-logo">
-          <div className="navbar-logo-icon">🎯</div>
-          PlacementAI
+          <div className="navbar-logo-icon">🎯</div>PlacementAI
         </Link>
-        <Link href="/analyze" className="btn btn-primary btn-sm">
+        <Link href="/analyze" className="btn btn-primary btn-sm" id="new-analysis-nav">
           New Analysis →
         </Link>
       </nav>
@@ -214,92 +228,94 @@ export default function ResultsPage() {
       <div className="results-page">
         <div className="container">
 
-          {/* Header Row */}
-          <div className="results-header animate-fade-in-up">
+          {/* ── Hero Row ── */}
+          <div className="results-hero">
+            {/* Left: Summary */}
             <div>
-              <p style={{ color: "var(--text-muted)", fontSize: "0.8rem", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <p className="results-meta">
                 Analysis · {new Date(analysis.metadata.analyzedAt).toLocaleDateString("en-IN", { dateStyle: "medium" })}
+                {analysis.metadata.companyType && ` · ${analysis.metadata.companyType}`}
               </p>
-              <h1 style={{ fontSize: "clamp(1.4rem, 3vw, 2rem)", fontWeight: 800, marginBottom: "12px" }}>
-                Your Resume Report
-              </h1>
-              <p style={{ color: "var(--text-secondary)", maxWidth: "560px", lineHeight: "1.6" }}>
-                {analysis.summary}
-              </p>
+              <h1 className="results-title">Your Resume Report</h1>
+              <p className="results-summary">{analysis.summary}</p>
 
-              {/* Strengths & Weaknesses */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginTop: "24px", maxWidth: "560px" }}>
-                <div style={{ background: "rgba(0, 212, 170, 0.05)", border: "1px solid rgba(0, 212, 170, 0.2)", borderRadius: "var(--radius-md)", padding: "16px" }}>
-                  <p style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--accent-green)", textTransform: "uppercase", marginBottom: "10px" }}>✓ Strengths</p>
+              {/* Strengths / Weaknesses */}
+              <div className="sw-grid">
+                <div className="sw-card sw-card-green">
+                  <div className="sw-label" style={{ color: "var(--accent-green)" }}>
+                    ✓ Strengths
+                  </div>
                   {analysis.strengths?.map((s, i) => (
-                    <p key={i} style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "6px", lineHeight: "1.5" }}>• {s}</p>
+                    <p className="sw-item" key={i}>• {s}</p>
                   ))}
                 </div>
-                <div style={{ background: "rgba(255, 107, 157, 0.05)", border: "1px solid rgba(255, 107, 157, 0.15)", borderRadius: "var(--radius-md)", padding: "16px" }}>
-                  <p style={{ fontSize: "0.7rem", fontWeight: 700, color: "#ff8fc7", textTransform: "uppercase", marginBottom: "10px" }}>✗ Weaknesses</p>
+                <div className="sw-card sw-card-pink">
+                  <div className="sw-label" style={{ color: "var(--accent-pink)" }}>
+                    ✗ Weaknesses
+                  </div>
                   {analysis.weaknesses?.map((w, i) => (
-                    <p key={i} style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "6px", lineHeight: "1.5" }}>• {w}</p>
+                    <p className="sw-item" key={i}>• {w}</p>
                   ))}
                 </div>
               </div>
             </div>
 
-            {/* Score Ring */}
-            <div className="score-ring-container">
-              <ScoreRing score={analysis.ats_score} color={scoreColor} />
-              <span className="badge" style={{ background: `${scoreColor}18`, color: scoreColor }}>
-                {scoreLabel.label}
+            {/* Right: Score Ring */}
+            <div className="score-ring-wrap">
+              <ScoreRing score={displayScore} color={scoreColor} />
+              <span
+                className="score-badge"
+                style={{
+                  background: `${scoreColor}18`,
+                  color: scoreColor,
+                  border: `1px solid ${scoreColor}30`,
+                }}
+              >
+                {scoreLabel}
               </span>
             </div>
           </div>
 
-          {/* Score Breakdown */}
-          <div className="score-breakdown-grid" style={{ marginBottom: "40px" }}>
-            {Object.entries(analysis.score_breakdown || {}).map(([key, val]) => {
-              const isRelevance = key === "relevance";
-              const isLocked = isRelevance && !isPaid;
-              return (
-                <div
-                  className="breakdown-item"
-                  key={key}
-                  style={{
-                    position: "relative",
-                    overflow: "hidden",
-                    ...(isLocked ? { cursor: "pointer" } : {}),
-                  }}
-                  onClick={isLocked ? handlePayment : undefined}
-                  title={isLocked ? "Unlock to see Relevance score" : undefined}
-                >
-                  {isLocked && (
-                    <div style={{
-                      position: "absolute", inset: 0,
-                      backdropFilter: "blur(6px)",
-                      background: "rgba(10,10,15,0.5)",
-                      display: "flex", flexDirection: "column",
-                      alignItems: "center", justifyContent: "center",
-                      gap: "4px", zIndex: 2,
-                      borderRadius: "var(--radius-md)",
-                    }}>
-                      <span style={{ fontSize: "1.2rem" }}>🔒</span>
-                      <span style={{ fontSize: "0.65rem", color: "var(--accent-primary)", fontWeight: 700 }}>UNLOCK</span>
+          {/* ── Score Breakdown ── */}
+          <div className="breakdown-section">
+            <h2 style={{ fontSize: "1rem", fontWeight: 700, marginBottom: "16px", color: "var(--text-secondary)" }}>
+              Score Breakdown
+            </h2>
+            <div className="breakdown-grid">
+              {Object.entries(analysis.score_breakdown || {}).map(([key, val]) => {
+                const score = val as number;
+                const color = getScoreColor(score);
+                return (
+                  <div className="breakdown-bar-card" key={key}>
+                    <div className="breakdown-score" style={{ color }}>
+                      {score}
                     </div>
-                  )}
-                  <div className="breakdown-value" style={{ color: getScoreColor(val as number) }}>
-                    {val as number}
+                    <div className="breakdown-bar-outer">
+                      <div
+                        className="breakdown-bar-inner"
+                        style={{
+                          width: scoreVisible ? `${score}%` : "0%",
+                          background: color,
+                          transition: "width 1s ease",
+                        }}
+                      />
+                    </div>
+                    <div className="breakdown-name">
+                      {key.replace("_", " ")}
+                    </div>
                   </div>
-                  <div className="breakdown-name">{key.replace("_", " ")}</div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
 
-          {/* Paywall or Full Content */}
+          {/* ── Paywall or Full Report ── */}
           {!isPaid ? (
-            <div className="paywall animate-fade-in-up">
-              <div style={{ fontSize: "3rem", marginBottom: "16px" }}>🔓</div>
-              <h2>Unlock Your Full Report</h2>
-              <p>
-                Get AI-rewritten bullets, missing keywords, LinkedIn tips, and a complete cover letter tailored to this JD.
+            <div className="paywall">
+              <span className="paywall-icon">🔓</span>
+              <h2 className="paywall-title">Unlock Your Full Report</h2>
+              <p className="paywall-desc">
+                Get AI-rewritten bullets, missing keywords, LinkedIn tips, India-specific career advice, and a complete cover letter tailored to this exact JD.
               </p>
 
               <div className="paywall-features">
@@ -309,8 +325,8 @@ export default function ResultsPage() {
                   "💼 5 LinkedIn tips",
                   "📝 Full cover letter",
                   "🇮🇳 India-specific advice",
-                ].map((f, i) => (
-                  <div className="paywall-feature" key={i}>{f}</div>
+                ].map((f) => (
+                  <div className="paywall-feature" key={f}>{f}</div>
                 ))}
               </div>
 
@@ -320,143 +336,148 @@ export default function ResultsPage() {
                 onClick={handlePayment}
                 disabled={paymentLoading}
               >
-                {paymentLoading ? "Loading..." : "🔓 Unlock Full Report — ₹99"}
+                {paymentLoading ? "⏳ Loading..." : "🔓 Unlock Full Report — ₹99"}
               </button>
 
-              <p style={{ marginTop: "16px", fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                Secured by Razorpay · UPI, Cards, Net Banking accepted
+              <p className="paywall-secure">
+                🔒 Secured by Razorpay · UPI, Cards, Net Banking accepted
               </p>
             </div>
           ) : (
-            <div className="results-grid animate-fade-in-up">
+            <div className="report-section">
               {/* Tabs */}
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "8px" }}>
+              <div className="tabs-row">
                 {[
-                  { key: "bullets", label: "✍️ Bullet Rewriter" },
-                  { key: "keywords", label: "🔍 Missing Keywords" },
-                  { key: "linkedin", label: "💼 LinkedIn Tips" },
-                  { key: "cover", label: "📝 Cover Letter" },
+                  { key: "bullets",  label: "✍️ Bullets" },
+                  { key: "keywords", label: "🔍 Keywords" },
+                  { key: "linkedin", label: "💼 LinkedIn" },
+                  { key: "cover",    label: "📝 Cover Letter" },
                 ].map((tab) => (
                   <button
                     key={tab.key}
-                    className={`btn ${activeTab === tab.key ? "btn-primary" : "btn-secondary"} btn-sm`}
-                    onClick={() => setActiveTab(tab.key as typeof activeTab)}
                     id={`tab-${tab.key}`}
+                    className={`tab-btn ${activeTab === tab.key ? "active" : ""}`}
+                    onClick={() => setActiveTab(tab.key as typeof activeTab)}
                   >
                     {tab.label}
                   </button>
                 ))}
               </div>
 
-              {/* Bullet Rewriter Tab */}
-              {activeTab === "bullets" && (
-                <div className="result-section">
-                  <h2>✍️ Bullet Point Rewriter</h2>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
-                    <div style={{ fontSize: "0.7rem", fontWeight: 700, color: "#ff8fc7", textTransform: "uppercase", letterSpacing: "0.05em" }}>Original</div>
-                    <div style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--accent-green)", textTransform: "uppercase", letterSpacing: "0.05em" }}>AI-Improved</div>
-                  </div>
-                  {analysis.improved_bullets?.map((bullet, i) => (
-                    <div key={i} className="bullet-pair">
-                      <div className="bullet-original">
-                        <div className="bullet-label" style={{ color: "#ff8fc7" }}>Before</div>
-                        {bullet.original}
-                      </div>
-                      <div className="bullet-improved">
-                        <div className="bullet-label" style={{ color: "var(--accent-green)" }}>After</div>
-                        {bullet.improved}
-                        {bullet.reason && (
-                          <div style={{ marginTop: "8px", fontSize: "0.75rem", color: "var(--text-muted)", fontStyle: "italic" }}>
-                            💡 {bullet.reason}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {/* Tab Content */}
+              <div className="tab-content">
 
-              {/* Missing Keywords Tab */}
-              {activeTab === "keywords" && (
-                <div className="result-section">
-                  <h2>🔍 Missing Keywords</h2>
-                  <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem", marginBottom: "24px" }}>
-                    These keywords appear in the job description but are missing from your resume. Add them naturally to boost your ATS score.
-                  </p>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
-                    {analysis.missing_keywords?.map((kw, i) => (
-                      <span key={i} className="keyword-chip missing">{kw}</span>
-                    ))}
-                  </div>
-                  {analysis.india_specific_tips && analysis.india_specific_tips.length > 0 && (
-                    <>
-                      <div className="divider" />
-                      <h3 style={{ fontSize: "1rem", fontWeight: 700, marginBottom: "16px" }}>
-                        🇮🇳 India-Specific Advice
-                      </h3>
-                      {analysis.india_specific_tips.map((tip, i) => (
-                        <div className="tip-item" key={i}>
-                          <div className="tip-bullet">{i + 1}</div>
-                          <span>{tip}</span>
+                {/* Bullet Rewriter */}
+                {activeTab === "bullets" && (
+                  <div>
+                    <h2 className="tab-title">✍️ AI Bullet Point Rewriter</h2>
+                    <p style={{ fontSize: "0.875rem", marginBottom: "24px" }}>
+                      Each bullet has been rewritten with a strong action verb, quantified impact, and specific technologies to maximise your ATS score.
+                    </p>
+                    <div className="bullet-grid">
+                      {analysis.improved_bullets?.map((b, i) => (
+                        <div className="bullet-pair" key={i}>
+                          <div className="bullet-before">
+                            <div className="bullet-tag" style={{ color: "var(--accent-pink)" }}>Before</div>
+                            <div className="bullet-text">{b.original}</div>
+                          </div>
+                          <div className="bullet-after">
+                            <div className="bullet-tag" style={{ color: "var(--accent-green)" }}>After</div>
+                            <div className="bullet-text" style={{ color: "var(--text-primary)" }}>{b.improved}</div>
+                            {b.reason && (
+                              <div className="bullet-reason">💡 {b.reason}</div>
+                            )}
+                          </div>
                         </div>
                       ))}
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* LinkedIn Tips Tab */}
-              {activeTab === "linkedin" && (
-                <div className="result-section">
-                  <h2>💼 LinkedIn Profile Tips</h2>
-                  <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem", marginBottom: "24px" }}>
-                    5 specific improvements to make your LinkedIn profile stand out to recruiters for this role.
-                  </p>
-                  {analysis.linkedin_tips?.map((tip, i) => (
-                    <div className="tip-item" key={i}>
-                      <div className="tip-bullet">{i + 1}</div>
-                      <span>{tip}</span>
                     </div>
-                  ))}
-                </div>
-              )}
+                  </div>
+                )}
 
-              {/* Cover Letter Tab */}
-              {activeTab === "cover" && (
-                <div className="result-section">
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "24px", flexWrap: "wrap", gap: "12px" }}>
-                    <h2 style={{ margin: 0 }}>📝 Cover Letter</h2>
-                    <button
-                      id="copy-cover-letter"
-                      className="btn btn-outline btn-sm"
-                      onClick={copyCoverLetter}
-                    >
-                      {copied ? "✓ Copied!" : "📋 Copy"}
-                    </button>
+                {/* Missing Keywords */}
+                {activeTab === "keywords" && (
+                  <div>
+                    <h2 className="tab-title">🔍 Missing Keywords</h2>
+                    <p style={{ fontSize: "0.875rem", marginBottom: "24px" }}>
+                      These keywords appear in the job description but are absent from your resume. Add them naturally to boost your ATS score.
+                    </p>
+                    <div className="keywords-wrap">
+                      {analysis.missing_keywords?.map((kw, i) => (
+                        <span className="kw-chip" key={i}>{kw}</span>
+                      ))}
+                    </div>
+
+                    {analysis.india_specific_tips && analysis.india_specific_tips.length > 0 && (
+                      <>
+                        <div className="divider" />
+                        <h3 style={{ fontSize: "1rem", fontWeight: 700, marginBottom: "16px" }}>
+                          🇮🇳 India-Specific Advice
+                        </h3>
+                        <div className="tips-list">
+                          {analysis.india_specific_tips.map((tip, i) => (
+                            <div className="tip-item" key={i}>
+                              <div className="tip-number">{i + 1}</div>
+                              <span className="tip-text">{tip}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
-                  <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem", marginBottom: "20px" }}>
-                    Tailored to the job description. Customize with your name and any specific details before sending.
-                  </p>
-                  <div className="cover-letter-text">
-                    {analysis.cover_letter}
+                )}
+
+                {/* LinkedIn Tips */}
+                {activeTab === "linkedin" && (
+                  <div>
+                    <h2 className="tab-title">💼 LinkedIn Profile Tips</h2>
+                    <p style={{ fontSize: "0.875rem", marginBottom: "24px" }}>
+                      5 specific changes to make your LinkedIn profile stand out to recruiters for this exact role.
+                    </p>
+                    <div className="tips-list">
+                      {analysis.linkedin_tips?.map((tip, i) => (
+                        <div className="tip-item" key={i}>
+                          <div className="tip-number">{i + 1}</div>
+                          <span className="tip-text">{tip}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+
+                {/* Cover Letter */}
+                {activeTab === "cover" && (
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "24px", flexWrap: "wrap", gap: "12px" }}>
+                      <h2 className="tab-title" style={{ margin: 0 }}>📝 Cover Letter</h2>
+                      <button
+                        id="copy-cover-letter"
+                        className="btn btn-outline btn-sm"
+                        onClick={copyCoverLetter}
+                      >
+                        {copied ? "✓ Copied!" : "📋 Copy"}
+                      </button>
+                    </div>
+                    <p style={{ fontSize: "0.875rem", marginBottom: "20px" }}>
+                      Tailored to the job description. Customize with your name before sending.
+                    </p>
+                    <div className="cover-letter-box">{analysis.cover_letter}</div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
           {/* Bottom CTA */}
-          <div style={{ textAlign: "center", marginTop: "48px", padding: "32px", background: "var(--bg-card)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border-default)" }}>
-            <p style={{ color: "var(--text-secondary)", marginBottom: "16px" }}>
+          <div className="bottom-cta">
+            <p style={{ marginBottom: "16px" }}>
               Applying to multiple companies? Each JD gets its own tailored analysis.
             </p>
             <Link href="/analyze" className="btn btn-primary" id="new-analysis-btn">
-              Analyze Another JD →
+              Analyse Another JD →
             </Link>
           </div>
-
         </div>
       </div>
-    </main>
+    </>
   );
 }
