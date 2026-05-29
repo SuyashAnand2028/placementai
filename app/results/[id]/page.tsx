@@ -89,7 +89,7 @@ export default function ResultsPage() {
   const [isPaid, setIsPaid] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<"bullets" | "keywords" | "linkedin" | "cover" | "resume">("bullets");
+  const [activeTab, setActiveTab] = useState<"bullets" | "keywords" | "linkedin" | "cover">("bullets");
 
   useEffect(() => {
     if (!id) return;
@@ -179,14 +179,6 @@ export default function ResultsPage() {
   const copyCoverLetter = () => {
     if (analysis?.cover_letter) {
       navigator.clipboard.writeText(analysis.cover_letter);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
-  const copyResume = () => {
-    if (analysis?.full_rewritten_resume) {
-      navigator.clipboard.writeText(analysis.full_rewritten_resume);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -344,7 +336,6 @@ export default function ResultsPage() {
                   { key: "keywords", label: "🔍 Missing Keywords" },
                   { key: "linkedin", label: "💼 LinkedIn Tips" },
                   { key: "cover", label: "📝 Cover Letter" },
-                  { key: "resume", label: "📄 Full Resume" },
                 ].map((tab) => (
                   <button
                     key={tab.key}
@@ -448,28 +439,6 @@ export default function ResultsPage() {
                   </p>
                   <div className="cover-letter-text">
                     {analysis.cover_letter}
-                  </div>
-                </div>
-              )}
-
-              {/* Full Resume Tab */}
-              {activeTab === "resume" && (
-                <div className="result-section">
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "24px", flexWrap: "wrap", gap: "12px" }}>
-                    <h2 style={{ margin: 0 }}>📄 Full AI Rewritten Resume</h2>
-                    <button
-                      id="copy-resume"
-                      className="btn btn-outline btn-sm"
-                      onClick={copyResume}
-                    >
-                      {copied ? "✓ Copied!" : "📋 Copy"}
-                    </button>
-                  </div>
-                  <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem", marginBottom: "20px" }}>
-                    Your entire resume, rewritten and formatted in Markdown. You can easily copy this into a markdown-to-PDF tool or a new document.
-                  </p>
-                  <div className="cover-letter-text" style={{ whiteSpace: "pre-wrap" }}>
-                    {analysis.full_rewritten_resume || "No full resume generated for this analysis. Please try uploading again."}
                   </div>
                 </div>
               )}

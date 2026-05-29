@@ -78,17 +78,15 @@ Analyze this resume against the job description. Return ONLY this JSON structure
   "missing_keywords": ["<keyword from JD not in resume>"],
   "india_specific_tips": ["<tip specific to Indian job market, company type, placement culture>"],
   "linkedin_tips": ["<specific tip 1>", "<specific tip 2>", "<specific tip 3>", "<specific tip 4>", "<specific tip 5>"],
-  "cover_letter": "<complete 3-4 paragraph professional cover letter, ~300 words, formal Indian business English, referencing specific skills from resume and JD>",
-  "full_rewritten_resume": "<complete rewritten resume in markdown format incorporating all the new bullet points and keywords>"
+  "cover_letter": "<complete 3-4 paragraph professional cover letter, ~300 words, formal Indian business English, referencing specific skills from resume and JD>"
 }
 
 Requirements:
 - improved_bullets: at least 5 entries
 - missing_keywords: at least 8 keywords  
 - india_specific_tips: at least 5 tips
-- linkedin_tips: exactly 5 entries
-- cover_letter: complete and professional, ready to send
-- full_rewritten_resume: complete, formatted in markdown, ready to copy-paste`;
+- linkedin_tips: array of 5 actionable tips for their LinkedIn profile
+- cover_letter: complete and professional, ready to send`;
 
   const completion = await groq.chat.completions.create({
     messages: [
