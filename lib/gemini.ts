@@ -93,9 +93,9 @@ Requirements:
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    model: "qwen/qwen3-32b",
+    model: "llama-3.3-70b-versatile",
     temperature: 0.7,
-    max_tokens: 4096,
+    max_tokens: 2000,
     response_format: { type: "json_object" },
   });
 
