@@ -95,9 +95,9 @@ Requirements:
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    model: "llama-3.3-70b-versatile",
+    model: "mixtral-8x7b-32768",
     temperature: 0.7,
-    max_tokens: 8000,
+    max_tokens: 4096,
     response_format: { type: "json_object" },
   });
 
