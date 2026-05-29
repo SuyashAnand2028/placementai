@@ -97,7 +97,8 @@ Requirements:
     ],
     model: "llama-3.3-70b-versatile",
     temperature: 0.7,
-    max_tokens: 4096,
+    max_tokens: 8000,
+    response_format: { type: "json_object" },
   });
 
   const text = completion.choices[0]?.message?.content ?? "";
