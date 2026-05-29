@@ -93,9 +93,10 @@ Requirements:
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    model: "qwen/qwen3-32b",
+    model: "meta-llama/llama-4-scout-17b-16e-instruct",
     temperature: 0.2,
     max_tokens: 4096,
+    response_format: { type: "json_object" }
   });
 
   const text = completion.choices[0]?.message?.content ?? "";
