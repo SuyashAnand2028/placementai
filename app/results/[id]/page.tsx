@@ -133,6 +133,12 @@ export default function ResultsPage() {
 
       const order = await res.json();
 
+      if (!res.ok) {
+        alert(order.error || "Payment setup failed. Please try again.");
+        setPaymentLoading(false);
+        return;
+      }
+
       const options: RazorpayOptions = {
         key: order.keyId,
         amount: order.amount,
