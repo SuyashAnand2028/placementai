@@ -98,7 +98,6 @@ Requirements:
     model: "llama-3.1-8b-instant",
     temperature: 0.7,
     max_tokens: 4096,
-    response_format: { type: "json_object" },
   });
 
   const text = completion.choices[0]?.message?.content ?? "";
