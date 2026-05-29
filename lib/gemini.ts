@@ -1,8 +1,5 @@
 import Groq from "groq-sdk";
-
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
+import { GoogleGenAI } from "@google/genai";
 
 export interface AnalysisResult {
   ats_score: number;
@@ -88,18 +85,36 @@ Requirements:
 - linkedin_tips: array of 5 actionable tips for their LinkedIn profile
 - cover_letter: complete and professional, ready to send`;
 
-  const completion = await groq.chat.completions.create({
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    model: "llama-3.3-70b-versatile",
-    temperature: 0.7,
-    max_tokens: 4096,
-    response_format: { type: "json_object" }
-  });
+  let text = "";
 
-  const text = completion.choices[0]?.message?.content ?? "";
+  if (process.env.GEMINI_API_KEY) {
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: userPrompt,
+      config: {
+        systemInstruction: systemPrompt,
+        responseMimeType: "application/json",
+        temperature: 0.7,
+      }
+    });
+    text = response.text || "";
+  } else if (process.env.GROQ_API_KEY) {
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+    const completion = await groq.chat.completions.create({
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.7,
+      max_tokens: 4096,
+      response_format: { type: "json_object" }
+    });
+    text = completion.choices[0]?.message?.content ?? "";
+  } else {
+    throw new Error("No AI API key found. Please configure GEMINI_API_KEY or GROQ_API_KEY in your environment variables.");
+  }
 
   // Extract JSON — handle any accidental markdown wrapping
   const jsonMatch = text.match(/\{[\s\S]*\}/);
